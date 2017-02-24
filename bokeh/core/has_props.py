@@ -581,9 +581,7 @@ class HasProps(with_metaclass(MetaHasProps, object)):
             None
 
         '''
-        old_dict = None
-        if hasattr(self, '__themed_values__'):
-            old_dict = getattr(self, '__themed_values__')
+        old_dict = getattr(self, '__themed_values__', None)
 
         # if the same theme is set again, it should reuse the
         # same dict
@@ -607,8 +605,10 @@ class HasProps(with_metaclass(MetaHasProps, object)):
 
         # Emit any change notifications that result
         for k, v in old_values.items():
-            prop = self.lookup(k)
-            prop.trigger_if_changed(self, v)
+            descriptor = self.lookup(k)
+            if not descriptor.property._has_stable_default():
+                raise RuntimeError("Properties such as %r with mutable or generated defaults cannot be themed" % descriptor.name)
+            descriptor.trigger_if_changed(self, v)
 
     def unapply_theme(self):
         ''' Remove any themed values and restore defaults.

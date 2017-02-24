@@ -3,7 +3,7 @@ import pytest
 
 import bokeh.core.has_props as hp
 
-from bokeh.core.properties import Int, String, NumberSpec, List, Override
+from bokeh.core.properties import Dict, Int, String, NumberSpec, List, Override
 from bokeh.core.property.descriptors import BasicPropertyDescriptor, DataSpecPropertyDescriptor
 
 class Parent(hp.HasProps):
@@ -16,6 +16,7 @@ class Child(Parent):
     str2 = String(default="foo")
     ds2 = NumberSpec()
     lst2 = List(Int, default=[1,2,3])
+    dict1 = Dict(String, Int)
 
 class OverrideChild(Parent):
     int1 = Override(default=20)
@@ -143,7 +144,7 @@ def test_HasProps_set_error():
     assert str(e).endswith("unexpected attribute 'int3' to Child, similar attributes are int2 or int1")
     with pytest.raises(AttributeError) as e:
         c.junkjunk = 10
-    assert str(e).endswith("unexpected attribute 'junkjunk' to Child, possible attributes are ds1, ds2, int1, int2, lst1, lst2 or str2")
+    assert str(e).endswith("unexpected attribute 'junkjunk' to Child, possible attributes are dict1, ds1, ds2, int1, int2, lst1, lst2 or str2")
 
 
 def test_HasProps_lookup():
@@ -160,14 +161,14 @@ def test_HasProps_lookup():
 
 def test_HasProps_apply_theme():
     c = Child()
-    theme = dict(int2=10, lst1=["foo", "bar"])
+    theme = dict(int2=10)
     c.apply_theme(theme)
     assert c.themed_values() is theme
     c.apply_theme(theme)
     assert c.themed_values() is theme
 
     assert c.int2 == 10
-    #assert c.lst1 == ["foo", "bar"] # https://github.com/bokeh/bokeh/issues/5644
+    assert c.lst1 == []
 
     assert c.int1 == 10
     assert c.ds1 == None
@@ -177,7 +178,7 @@ def test_HasProps_apply_theme():
 
     c.int2 = 25
     assert c.int2 == 25
-    #assert c.lst1 == ["foo", "bar"] # https://github.com/bokeh/bokeh/issues/5644
+    assert c.lst1 == []
 
     assert c.int1 == 10
     assert c.ds1 == None
@@ -187,7 +188,7 @@ def test_HasProps_apply_theme():
 
     c.ds2 = "foo"
     assert c.int2 == 25
-    #assert c.lst1 == ["foo", "bar"] # https://github.com/bokeh/bokeh/issues/5644
+    assert c.lst1 == []
 
     assert c.int1 == 10
     assert c.ds1 == None
@@ -195,12 +196,87 @@ def test_HasProps_apply_theme():
     assert c.ds2 == "foo"
     assert c.lst2 == [1,2,3]
 
+def test_HasProps_apply_theme_multiple():
+    c = Child()
+    theme = dict(int2=10, ds1={'value': 'ds1'})
+    c.apply_theme(theme)
+    assert c.themed_values() is theme
+    c.apply_theme(theme)
+    assert c.themed_values() is theme
+
+    assert c.int2 == 10
+    assert c.lst1 == []
+
+    assert c.int1 == 10
+    assert c.ds1 == {'value': 'ds1'}
+    assert c.str2 == "foo"
+    assert c.ds2 == None
+    assert c.lst2 == [1,2,3]
+
+    c.int2 = 25
+    assert c.int2 == 25
+    assert c.lst1 == []
+
+    assert c.int1 == 10
+    assert c.ds1 == {'value': 'ds1'}
+    assert c.str2 == "foo"
+    assert c.ds2 == None
+    assert c.lst2 == [1,2,3]
+
+    c.ds2 = "foo"
+    assert c.int2 == 25
+    assert c.lst1 == []
+
+    assert c.int1 == 10
+    assert c.ds1 == {'value': 'ds1'}
+    assert c.str2 == "foo"
+    assert c.ds2 == "foo"
+    assert c.lst2 == [1,2,3]
+
+def test_HasProps_apply_theme_respects_sets():
+    c = Child()
+    theme = dict(int2=10, ds1={'value': 'ds1'})
+    c.int2 = 20
+    c.apply_theme(theme)
+    assert c.themed_values() is theme
+    c.apply_theme(theme)
+    assert c.themed_values() is theme
+
+    assert c.int2 == 20
+    assert c.lst1 == []
+
+    assert c.int1 == 10
+    assert c.ds1 == {'value': 'ds1'}
+    assert c.str2 == "foo"
+    assert c.ds2 == None
+    assert c.lst2 == [1,2,3]
+
+    c.int2 = 25
+    assert c.int2 == 25
+    assert c.lst1 == []
+
+    assert c.int1 == 10
+    assert c.ds1 == {'value': 'ds1'}
+    assert c.str2 == "foo"
+    assert c.ds2 == None
+    assert c.lst2 == [1,2,3]
+
+    c.ds2 = "foo"
+    assert c.int2 == 25
+    assert c.lst1 == []
+
+    assert c.int1 == 10
+    assert c.ds1 == {'value': 'ds1'}
+    assert c.str2 == "foo"
+    assert c.ds2 == "foo"
+    assert c.lst2 == [1,2,3]
+
 def test_HasProps_unapply_theme():
     c = Child()
-    theme = dict(int2=10, lst1=["foo", "bar"])
+    theme = dict(int2=10)
     c.apply_theme(theme)
     assert c.int2 == 10
-    #assert c.lst1 == ["foo", "bar"] # https://github.com/bokeh/bokeh/issues/5644
+    assert c.lst1 == []
 
     assert c.int1 == 10
     assert c.ds1 == None
@@ -219,6 +295,16 @@ def test_HasProps_unapply_theme():
     assert c.lst2 == [1,2,3]
 
     assert c.themed_values() == None
+
+def test_HasProps_apply_theme_mutable_error():
+    c = Child()
+    theme = dict(int2=10, lst1=["foo", "bar"])
+    with pytest.raises(RuntimeError):
+        c.apply_theme(theme)
+
+    theme = dict(int2=10, dict1={"foo": 10})
+    with pytest.raises(RuntimeError):
+        c.apply_theme(theme)
 
 def test_HasProps_pretty():
     p = Parent()
